@@ -3,10 +3,12 @@ package lunar
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -107,30 +109,24 @@ func (s *Solar) Convert() *Lunar {
 	var isLeap bool
 	var temp int
 
-	var day, dayCyl int
-	var month, monCyl int
-	var year, yearCyl int
+	var day int
+	var month int
+	var year int
 
 	base := time.Date(BaseYear, 1, 31, 0, 0, 0, 0, time.UTC)
 	offset := int(s.Sub(base).Hours() / 24) //offset days
 
-	dayCyl = offset + 40
-	monCyl = 14
-
 	for i = BaseYear; i < 2050 && offset > 0; i++ {
 		temp = YearDays(i)
 		offset -= temp
-		monCyl += 12
 	}
 
 	if offset < 0 {
 		offset += temp
 		i--
-		monCyl -= 12
 	}
 
 	year = i
-	yearCyl = i - 1864
 
 	leap = LeapMonth(i) //闰哪个月
 	isLeap = false
@@ -149,9 +145,6 @@ func (s *Solar) Convert() *Lunar {
 			isLeap = false
 		}
 		offset -= temp
-		if isLeap == false {
-			monCyl++
-		}
 	}
 
 	if offset == 0 && leap > 0 && i == (leap+1) {
@@ -160,14 +153,12 @@ func (s *Solar) Convert() *Lunar {
 		} else {
 			isLeap = true
 			i--
-			monCyl--
 		}
 	}
 
 	if offset < 0 {
 		offset += temp
 		i--
-		monCyl--
 	}
 	month = i
 	day = offset + 1
@@ -177,7 +168,7 @@ func (s *Solar) Convert() *Lunar {
 
 func (l *Lunar) Convert() *Solar {
 	lyear := l.Year()
-	lmonth = l.Month()
+	lmonth := l.Month()
 	lday := l.Day()
 	offset := 0
 	leap := IsLeap(lyear)
@@ -189,17 +180,18 @@ func (l *Lunar) Convert() *Solar {
 
 	// increment month
 	// add days in all months up to the current month
-	for i := 1; i < lmonth; i++ {
+	var cur int
+	for cur = 1; cur < lmonth; cur++ {
 		// add extra days for leap month
-		if i == LeapMonth(lyear) {
+		if cur == LeapMonth(lyear) {
 			offset += LeapDays(lyear)
 		}
-		offset += MonthDays(lyear, i)
+		offset += MonthDays(lyear, cur)
 	}
 	// if current month is leap month, add days in normal month
 	isLeapMonth := (LeapMonth(lyear) == lmonth)
 	if leap && isLeapMonth {
-		offset += MonthDays(lyear, i)
+		offset += MonthDays(lyear, cur)
 	}
 	// increment
 	offset += lday - 1
@@ -208,7 +200,7 @@ func (l *Lunar) Convert() *Solar {
 	solar := base.Add(time.Duration(offset * 86400000))
 
 	year := solar.Year()
-	month := solar.Month()
+	month := int(solar.Month())
 	day := solar.Day()
 	return NewSolar(year, month, day, l.Hour(), l.Minute(), l.Second())
 }
@@ -216,27 +208,27 @@ func (l *Lunar) Convert() *Solar {
 /*
  * Lunar Methods
  */
-func (l *Lunar) Year() {
+func (l *Lunar) Year() int {
 	return l.year
 }
 
-func (l *Lunar) Month() {
+func (l *Lunar) Month() int {
 	return l.month
 }
 
-func (l *Lunar) Day() {
+func (l *Lunar) Day() int {
 	return l.day
 }
 
-func (l *Lunar) Hour() {
+func (l *Lunar) Hour() int {
 	return l.hour
 }
 
-func (l *Lunar) Minute() {
+func (l *Lunar) Minute() int {
 	return l.minute
 }
 
-func (l *Lunar) Second() {
+func (l *Lunar) Second() int {
 	return l.second
 }
 
@@ -264,9 +256,12 @@ var JieQiTableOffset = "21112211212211212122221122112212222221222222222122212222
 // y年的第n个节气为几日(从0,即小寒算起)
 func JieQi(year, n int) int {
 	charcodeAt := int(JieQiTableIdx[year-BaseYear])
-	offset := strconv.Atoi(JieQiTableOffset[(charcodeAt-48)*24+n])
+	offset, err := strconv.Atoi(string(JieQiTableOffset[(charcodeAt-48)*24+n]))
+	if err != nil {
+		log.Println("strconv.Atoi error")
+	}
 	//return JieQiTableBase[n] + JieQiTableOffset.charAt((JieQiTableIdx.charCodeAt(year-BaseYear)-48)*24+n)
-	return JieQiTableBase + offset
+	return JieQiTableBase[n] + offset
 }
 
 /*
@@ -284,7 +279,7 @@ func IsLeap(year int) bool {
 func YearDays(year int) int {
 	sum := 348
 	for i := 0x8000; i > 0x8; i >>= 1 {
-		if lunarTable[year-BaseYear] & i {
+		if (lunarTable[year-BaseYear] & i) != 0 {
 			sum += 1
 		}
 	}
@@ -299,8 +294,8 @@ func LeapMonth(year int) int {
 
 //the days of this year's leap month
 func LeapDays(year int) int {
-	if LeapMonth(year) {
-		if lunarTable[year-BaseYear] & 0x10000 {
+	if LeapMonth(year) != 0 {
+		if (lunarTable[year-BaseYear] & 0x10000) != 0 {
 			return 30
 		}
 		return 29
@@ -310,7 +305,7 @@ func LeapDays(year int) int {
 
 //the days of the m-th month of this year
 func MonthDays(year, month int) int {
-	if lunarTable[year-BaseYear] & (0x10000 >> month) {
+	if (lunarTable[year-BaseYear] & (0x10000 >> uint(month))) != 0 {
 		return 30
 	}
 	return 29
@@ -393,7 +388,7 @@ func (fm FestivalMap) SaveToFile(filename string) error {
 	}
 	file.Close()
 	for k, v := range fm {
-		file.WriteString(k, " ", v)
+		file.WriteString(k + " " + v + "\n")
 	}
 	return nil
 }
@@ -406,13 +401,13 @@ func NewFestivalsFromFile(filename string) FestivalMap {
 	defer file.Close()
 
 	fest := NewFestivalMap()
-	r, err := bufio.NewReader(file)
+	r := bufio.NewReader(file)
 	for {
 		buf, err := r.ReadString('\n')
 		if err == io.EOF {
 			break
 		}
-		line := strings.Trim(string(buf))
+		line := strings.Trim(string(buf), " ")
 		items := strings.Split(line, " ")
 		date := items[0]
 		desc := items[1]
