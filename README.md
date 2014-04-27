@@ -1,4 +1,4 @@
 lunar
 =====
 
-Chinese Lunar Calendar Package
+Chinese Lunar Calendar Package Written by Go.
