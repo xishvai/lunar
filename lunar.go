@@ -267,10 +267,10 @@ var JieQiTableOffset = "21112211212211212122221122112212222221222222222122212222
 
 // y年的第n个节气为几日(从0,即小寒算起)
 func JieQi(year, n int) int {
-	charcodeAt := int(JieQiTableIdx[year - BaseYear])
-	offset:=strconv.Atoi(JieQiTableOffset[charcodeAt-48)*24+n])
+	charcodeAt := int(JieQiTableIdx[year-BaseYear])
+	offset := strconv.Atoi(JieQiTableOffset[(charcodeAt-48)*24+n])
 	//return JieQiTableBase[n] + JieQiTableOffset.charAt((JieQiTableIdx.charCodeAt(year-BaseYear)-48)*24+n)
-	return JieQiTableBase+offset
+	return JieQiTableBase + offset
 }
 
 /*
