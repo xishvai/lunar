@@ -1,8 +1,9 @@
 package main
 
 import "github.com/xishvai/lunar"
+import "fmt"
 
 func main() {
 	s := lunar.NewSolarNow()
-	println(s)
+	fmt.Printf("%v", s)
 }
