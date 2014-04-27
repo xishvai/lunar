@@ -137,12 +137,12 @@ func (s *Solar) Convert() *Lunar {
 
 	for i := 1; i < 13 && offset > 0; i++ {
 		//leap month
-		if leap > 0 && i == (leap+1) && this.isLeap == false {
+		if leap > 0 && i == (leap+1) && isLeap == false {
 			i--
 			isLeap = true
-			temp = LeapDays(this.year)
+			temp = LeapDays(year)
 		} else {
-			temp = MonthDays(this.year, i)
+			temp = MonthDays(year, i)
 		}
 		//reset leap month
 		if isLeap == true && i == (leap+1) {
@@ -421,7 +421,7 @@ func NewFestivalsFromFile(filename string) FestivalMap {
 	return fest
 }
 
-const (
+var (
 	SolarFestivals = FestivalMap{
 		"0101": "元旦",
 		"0214": "情人节",
