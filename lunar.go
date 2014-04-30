@@ -17,10 +17,11 @@ var (
 	// 保存公历农历之间的转换信息:以任意一年作为起点，把从这一年起若干年(依需要而定)的农历信息保存起来。
 	// 要保存一年的信息，只要两个信息就够了: 1)农历每个月的大小;2)今年是否有闰月，闰几月以及闰月的大小。
 	// 用一个整数来保存这些信息就足够了。
+
 	// 具体的方法是:用一位来表示一个月的大小，大月记为1，小月记为0，
 	// 这样就用掉12位(无闰月)或13位(有闰月)，再用高四位来表示闰月的月份，没有闰月记为0。
-	// ※-----例----: 2000年的信息数据是0xc96，化成二进制就是110010010110B，
-	// 表示的含义是:1、2、5、8、10、11月大，其余月份小。
+	// 例如：2000年的信息数据是0xc96，化成二进制就是110010010110B，表示的
+	// 含义是:1、2、5、8、10、11月大，其余月份小。
 	// Since 1900~2050
 	lunarTable = [...]int{
 		0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260,
@@ -60,7 +61,10 @@ var (
 	lunarMonthNameTable = [...]string{"正", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "腊"}
 	monthStr1           = [...]string{"初", "十", "廿", "卅"}
 	monthStr2           = [...]string{"日", "一", "二", "三", "四", "五", "六", "七", "八", "九"}
-	BaseYear            = 1900
+
+	BaseYear = 1900
+	MaxYear  = 2050
+	base     = time.Date(BaseYear, 1, 31, 0, 0, 0, 0, time.UTC)
 )
 
 //Solar structure
@@ -78,7 +82,7 @@ func NewSolarNow() *Solar {
 }
 
 func (s *Solar) String() string {
-	return fmt.Sprintf("%d年%d月%d日 %d时%d分%d秒", s.Year(), s.Month(), s.Day(), s.Hour(), s.Minute(), s.Second())
+	return fmt.Sprintf("%d年%02d月%02d日 %2d时%2d分%2d秒", s.Year(), s.Month(), s.Day(), s.Hour(), s.Minute(), s.Second())
 }
 
 //Luanr structure
@@ -100,7 +104,7 @@ func NewLunarNow() *Lunar {
 }
 
 func (l *Lunar) String() string {
-	return fmt.Sprintf("%s%s%s %d时%d分%d秒", YearString(l.Year()), MonthString(l.Month()), DayString(l.Day()), l.Hour(), l.Minute(), l.Second())
+	return fmt.Sprintf("%s%s%s %2d时%2d分%2d秒", YearString(l.Year()), MonthString(l.Month()), DayString(l.Day()), l.Hour(), l.Minute(), l.Second())
 }
 
 func (s *Solar) Convert() *Lunar {
@@ -113,10 +117,10 @@ func (s *Solar) Convert() *Lunar {
 	var month int
 	var year int
 
-	base := time.Date(BaseYear, 1, 31, 0, 0, 0, 0, time.UTC)
-	offset := int(s.Sub(base).Hours() / 24) //offset days
+	//offset days
+	offset := int(s.Sub(base).Seconds() / 86400)
 
-	for i = BaseYear; i < 2050 && offset > 0; i++ {
+	for i = BaseYear; i < MaxYear && offset > 0; i++ {
 		temp = YearDays(i)
 		offset -= temp
 	}
@@ -128,10 +132,10 @@ func (s *Solar) Convert() *Lunar {
 
 	year = i
 
-	leap = LeapMonth(i) //闰哪个月
+	leap = LeapMonth(i)
 	isLeap = false
 
-	for i := 1; i < 13 && offset > 0; i++ {
+	for i = 1; i < 13 && offset > 0; i++ {
 		//leap month
 		if leap > 0 && i == (leap+1) && isLeap == false {
 			i--
@@ -160,7 +164,7 @@ func (s *Solar) Convert() *Lunar {
 		offset += temp
 		i--
 	}
-	month = i
+	month = i - 1
 	day = offset + 1
 
 	return &Lunar{year, month, day, s.Hour(), s.Minute(), s.Second()}
@@ -181,7 +185,7 @@ func (l *Lunar) Convert() *Solar {
 	// increment month
 	// add days in all months up to the current month
 	var cur int
-	for cur = 1; cur < lmonth; cur++ {
+	for cur = 1; cur < lmonth+1; cur++ {
 		// add extra days for leap month
 		if cur == LeapMonth(lyear) {
 			offset += LeapDays(lyear)
@@ -190,19 +194,68 @@ func (l *Lunar) Convert() *Solar {
 	}
 	// if current month is leap month, add days in normal month
 	isLeapMonth := (LeapMonth(lyear) == lmonth)
+
 	if leap && isLeapMonth {
 		offset += MonthDays(lyear, cur)
 	}
 	// increment
-	offset += lday - 1
+	offset += (lday - 1)
 
-	base := time.Date(BaseYear, 1, 31, 0, 0, 0, 0, time.UTC)
-	solar := base.Add(time.Duration(offset * 86400000))
+	//BUG: maybe overflow
+	d := time.Duration(offset*24) * time.Hour
+	solar := base.Add(d)
 
 	year := solar.Year()
 	month := int(solar.Month())
 	day := solar.Day()
 	return NewSolar(year, month, day, l.Hour(), l.Minute(), l.Second())
+}
+
+/*
+ * Common Methods
+ */
+
+func IsLeap(year int) bool {
+	if year%4 == 0 && (year%100 != 0 || year%400 == 0) {
+		return true
+	}
+	return false
+}
+
+//the total days of this year
+func YearDays(year int) int {
+	sum := 348
+	for i := 0x8000; i > 0x8; i >>= 1 {
+		if (lunarTable[year-BaseYear] & i) != 0 {
+			sum += 1
+		}
+	}
+	return sum + LeapDays(year)
+}
+
+//which month leaps in this year?
+//return 1-12(if there is one) or 0(no leap month).
+func LeapMonth(year int) int {
+	return int(lunarTable[year-BaseYear] & 0xf)
+}
+
+//the days of this year's leap month
+func LeapDays(year int) int {
+	if LeapMonth(year) != 0 {
+		if (lunarTable[year-BaseYear] & 0x10000) != 0 {
+			return 30
+		}
+		return 29
+	}
+	return 0
+}
+
+//the days of the m-th month of this year
+func MonthDays(year, month int) int {
+	if (lunarTable[year-BaseYear] & (0x10000 >> uint(month))) != 0 {
+		return 30
+	}
+	return 29
 }
 
 /*
@@ -264,55 +317,8 @@ func JieQi(year, n int) int {
 	return JieQiTableBase[n] + offset
 }
 
-/*
- * Common Methods
- */
-
-func IsLeap(year int) bool {
-	if year%4 == 0 && (year%100 != 0 || year%400 == 0) {
-		return true
-	}
-	return false
-}
-
-//the total days of this year
-func YearDays(year int) int {
-	sum := 348
-	for i := 0x8000; i > 0x8; i >>= 1 {
-		if (lunarTable[year-BaseYear] & i) != 0 {
-			sum += 1
-		}
-	}
-	return sum + LeapDays(year)
-}
-
-//which month leaps in this year?
-//return 1-12(if there is one) or 0(no leap month).
-func LeapMonth(year int) int {
-	return lunarTable[year-BaseYear] & 0xf
-}
-
-//the days of this year's leap month
-func LeapDays(year int) int {
-	if LeapMonth(year) != 0 {
-		if (lunarTable[year-BaseYear] & 0x10000) != 0 {
-			return 30
-		}
-		return 29
-	}
-	return 0
-}
-
-//the days of the m-th month of this year
-func MonthDays(year, month int) int {
-	if (lunarTable[year-BaseYear] & (0x10000 >> uint(month))) != 0 {
-		return 30
-	}
-	return 29
-}
-
 func YearString(year int) string {
-	return string(year) + "年"
+	return strconv.Itoa(year) + "年"
 }
 
 func MonthString(month int) string {
