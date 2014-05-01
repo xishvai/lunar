@@ -33,3 +33,7 @@ Example
 		l2s := l.Convert()
 		fmt.Println(l2s)
 	}
+
+NOTICE
+======
+Lunar month range is [1,12]
