@@ -3,6 +3,42 @@ lunar
 
 Chinese Lunar Calendar Package Written by Go.
 
+About
+=====
+
+	//Solar structure
+	type Solar struct {
+		time.Time
+	}
+	
+	//Luanr structure
+	type Lunar struct {
+		year   int
+		month  int
+		day    int
+		hour   int
+		minute int
+		second int
+	}
+
+`func NewSolar(year, month, day, hour, min, sec int) *Solar`
+
+`func NewSolarNow() *Solar`
+
+`func NewLunar(year, month, day, hour, min, sec int) *Lunar`
+
+`func NewLunarNow() *Lunar`
+
+Lunar or Solar has a method `Convert` to convert itself to the *opposite* one.
+
+`func (s *Solar) Convert() *Lunar`
+
+`func (l *Lunar) Convert() *Solar`
+
+NOTICE
+======
+This package's year range is `[1900,2050]` and month range is `[1,12]`.
+
 Example
 =======
 	package main
@@ -33,7 +69,3 @@ Example
 		l2s := l.Convert()
 		fmt.Println(l2s)
 	}
-
-NOTICE
-======
-Lunar month range is [1,12]

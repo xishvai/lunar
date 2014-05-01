@@ -2,15 +2,14 @@
 package lunar
 
 import (
-	"bufio"
-	"errors"
 	"fmt"
-	"io"
-	"log"
-	"os"
 	"strconv"
-	"strings"
 	"time"
+)
+
+const (
+	MinYear = 1900
+	MaxYear = 2050
 )
 
 var (
@@ -19,7 +18,7 @@ var (
 	// 例如：2000年的信息数据是0xc96，化成二进制就是110010010110B，表示的
 	// 含义是:1、2、5、8、10、11月大，其余月份小。
 	// Since 1900~2050
-	lunarTable = [...]int{
+	lunarTable = []int{
 		0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260,
 		0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
 		0x04ae0, 0x0a5b6, 0x0a4d0, 0x0d250, 0x1d255,
@@ -51,16 +50,11 @@ var (
 		0x0b5a0, 0x056d0, 0x055b2, 0x049b0, 0x0a577,
 		0x0a4b0, 0x0aa50, 0x1b255, 0x06d20, 0x0ada0,
 	}
-	GanTable            = [...]string{"甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"}
-	ZhiTable            = [...]string{"子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"}
-	AnimalTable         = [...]string{"鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"}
-	lunarMonthNameTable = [...]string{"正", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "腊"}
-	monthStr1           = [...]string{"初", "十", "廿", "卅"}
-	monthStr2           = [...]string{"日", "一", "二", "三", "四", "五", "六", "七", "八", "九"}
+	lunarMonthNameTable = []string{"正", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "腊"}
+	monthStr1           = []string{"初", "十", "廿", "卅"}
+	monthStr2           = []string{"日", "一", "二", "三", "四", "五", "六", "七", "八", "九"}
 
-	BaseYear = 1900
-	MaxYear  = 2050
-	base     = time.Date(BaseYear, 1, 31, 0, 0, 0, 0, time.UTC)
+	base = time.Date(MinYear, 1, 31, 0, 0, 0, 0, time.UTC)
 )
 
 //Solar structure
@@ -69,6 +63,9 @@ type Solar struct {
 }
 
 func NewSolar(year, month, day, hour, min, sec int) *Solar {
+	if !isYearValid(year) {
+		return nil
+	}
 	t := time.Date(year, time.Month(month), day, hour, min, sec, 0, time.UTC)
 	return &Solar{t}
 }
@@ -78,7 +75,15 @@ func NewSolarNow() *Solar {
 }
 
 func (s *Solar) String() string {
-	return fmt.Sprintf("%d年%02d月%02d日 %2d时%2d分%2d秒", s.Year(), s.Month(), s.Day(), s.Hour(), s.Minute(), s.Second())
+	return fmt.Sprintf("%d年%02d月%02d日 %2d时%2d分%2d秒",
+		s.Year(), s.Month(), s.Day(), s.Hour(), s.Minute(), s.Second())
+}
+
+func (s *Solar) Festival(fm FestivalMap) (string, error) {
+	m := fmt.Sprintf("%2d", int(s.Month()))
+	d := fmt.Sprintf("%2d", s.Day())
+
+	return fm.Get(m + d)
 }
 
 //Luanr structure
@@ -92,6 +97,9 @@ type Lunar struct {
 }
 
 func NewLunar(year, month, day, hour, min, sec int) *Lunar {
+	if !isYearValid(year) {
+		return nil
+	}
 	return &Lunar{year, month, day, hour, min, sec}
 }
 
@@ -116,7 +124,7 @@ func (s *Solar) Convert() *Lunar {
 	//offset days
 	offset := int(s.Sub(base).Seconds() / 86400)
 
-	for i = BaseYear; i < MaxYear && offset > 0; i++ {
+	for i = MinYear; i < MaxYear && offset > 0; i++ {
 		temp = YearDays(i)
 		offset -= temp
 	}
@@ -174,7 +182,7 @@ func (l *Lunar) Convert() *Solar {
 	leap := IsLeap(lyear)
 
 	// increment year
-	for i := BaseYear; i < lyear; i++ {
+	for i := MinYear; i < lyear; i++ {
 		offset += YearDays(i)
 	}
 
@@ -222,7 +230,7 @@ func IsLeap(year int) bool {
 func YearDays(year int) int {
 	sum := 348
 	for i := 0x8000; i > 0x8; i >>= 1 {
-		if (lunarTable[year-BaseYear] & i) != 0 {
+		if (lunarTable[year-MinYear] & i) != 0 {
 			sum += 1
 		}
 	}
@@ -232,13 +240,13 @@ func YearDays(year int) int {
 //which month leaps in this year?
 //return 1-12(if there is one) or 0(no leap month).
 func LeapMonth(year int) int {
-	return int(lunarTable[year-BaseYear] & 0xf)
+	return int(lunarTable[year-MinYear] & 0xf)
 }
 
 //the days of this year's leap month
 func LeapDays(year int) int {
 	if LeapMonth(year) != 0 {
-		if (lunarTable[year-BaseYear] & 0x10000) != 0 {
+		if (lunarTable[year-MinYear] & 0x10000) != 0 {
 			return 30
 		}
 		return 29
@@ -248,7 +256,7 @@ func LeapDays(year int) int {
 
 //the days of the m-th month of this year
 func MonthDays(year, month int) int {
-	if (lunarTable[year-BaseYear] & (0x10000 >> uint(month))) != 0 {
+	if (lunarTable[year-MinYear] & (0x10000 >> uint(month))) != 0 {
 		return 30
 	}
 	return 29
@@ -257,6 +265,7 @@ func MonthDays(year, month int) int {
 /*
  * Lunar Methods
  */
+
 func (l *Lunar) Year() int {
 	return l.year
 }
@@ -288,39 +297,17 @@ func (l *Lunar) Festival(fm FestivalMap) (string, error) {
 	return fm.Get(m + d)
 }
 
-/*
- * 24 JieQi
- */
-var JieQiTable = []string{
-	"小寒", "大寒", "立春", "雨水", "惊蛰", "春分",
-	"清明", "谷雨", "立夏", "小满", "芒种", "夏至",
-	"小暑", "大暑", "立秋", "处暑", "白露", "秋分",
-	"寒露", "霜降", "立冬", "小雪", "大雪", "冬至",
-}
-
-var JieQiTableBase = []int{4, 19, 3, 18, 4, 19, 4, 19, 4, 20, 4, 20, 6, 22, 6, 22, 6, 22, 7, 22, 6, 21, 6, 21}
-var JieQiTableIdx = "0123415341536789:;<9:=<>:=1>?012@015@015@015AB78CDE8CD=1FD01GH01GH01IH01IJ0KLMN;LMBEOPDQRST0RUH0RVH0RWH0RWM0XYMNZ[MB\\]PT^_ST`_WH`_WH`_WM`_WM`aYMbc[Mde]Sfe]gfh_gih_Wih_WjhaWjka[jkl[jmn]ope]qph_qrh_sth_W"
-var JieQiTableOffset = "211122112122112121222211221122122222212222222221222122222232222222222222222233223232223232222222322222112122112121222211222122222222222222222222322222112122112121222111211122122222212221222221221122122222222222222222222223222232222232222222222222112122112121122111211122122122212221222221221122122222222222222221211122112122212221222211222122222232222232222222222222112122112121111111222222112121112121111111222222111121112121111111211122112122112121122111222212111121111121111111111122112122112121122111211122112122212221222221222211111121111121111111222111111121111111111111111122112121112121111111222111111111111111111111111122111121112121111111221122122222212221222221222111011111111111111111111122111121111121111111211122112122112121122211221111011111101111111111111112111121111121111111211122112122112221222211221111011111101111111110111111111121111111111111111122112121112121122111111011111121111111111111111011111111112111111111111011111111111111111111221111011111101110111110111011011111111111111111221111011011101110111110111011011111101111111111211111001011101110111110110011011111101111111111211111001011001010111110110011011111101111111110211111001011001010111100110011011011101110111110211111001011001010011100110011001011101110111110211111001010001010011000100011001011001010111110111111001010001010011000111111111111111111111111100011001011001010111100111111001010001010000000111111000010000010000000100011001011001010011100110011001011001110111110100011001010001010011000110011001011001010111110111100000010000000000000000011001010001010011000111100000000000000000000000011001010001010000000111000000000000000000000000011001010000010000000"
-
-// y年的第n个节气为几日(从0,即小寒算起)
-func JieQi(year, n int) int {
-	charcodeAt := int(JieQiTableIdx[year-BaseYear])
-	offset, err := strconv.Atoi(string(JieQiTableOffset[(charcodeAt-48)*24+n]))
-	if err != nil {
-		log.Println("strconv.Atoi error")
-	}
-	//return JieQiTableBase[n] + JieQiTableOffset.charAt((JieQiTableIdx.charCodeAt(year-BaseYear)-48)*24+n)
-	return JieQiTableBase[n] + offset
-}
-
+// Used Only by Lunar Object
 func YearString(year int) string {
 	return strconv.Itoa(year) + "年"
 }
 
+// Used Only by Lunar Object
 func MonthString(month int) string {
 	return lunarMonthNameTable[(month-1)%12] + "月"
 }
 
+// Used Only by Lunar Object
 func DayString(day int) (s string) {
 	switch day {
 	case 10:
@@ -336,125 +323,10 @@ func DayString(day int) (s string) {
 	return
 }
 
-/*
- * Utils
- */
-
-// Tian Gan
-func Gan(x int) string {
-	return GanTable[x%10]
-}
-
-// Di Zhi
-func Zhi(x int) string {
-	return ZhiTable[x%12]
-}
-
-// Tian Gan & Di Zhi
-func GanZhi(x int) string {
-	return GanTable[x%10] + ZhiTable[x%12]
-}
-
-// Sheng Xiao
-func AnimalYear(year int) string {
-	return AnimalTable[((year - BaseYear) % 12)]
-}
-
-type FestivalMap map[string]string
-
-func NewFestivalMap() FestivalMap {
-	return make(FestivalMap)
-}
-
-func (fm FestivalMap) Add(key, val string) {
-	fm[key] = val
-}
-
-func (fm FestivalMap) Del(key string) {
-	delete(fm, key)
-}
-
-func (fm FestivalMap) Get(key string) (string, error) {
-	desc, ok := fm[key]
-	if ok {
-		return desc, nil
+func isYearValid(year int) bool {
+	if year > MaxYear || year < MinYear {
+		fmt.Printf("Invalid Year: %d, Year Range[%d - %d].\n", year, MinYear, MaxYear)
+		return false
 	}
-	return "", errors.New("NotFound")
+	return true
 }
-
-func (fm FestivalMap) SaveToFile(filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	file.Close()
-	for k, v := range fm {
-		file.WriteString(k + " " + v + "\n")
-	}
-	return nil
-}
-
-func NewFestivalsFromFile(filename string) FestivalMap {
-	file, err := os.Open(filename)
-	if err != nil {
-		log.Println(err)
-	}
-	defer file.Close()
-
-	fest := NewFestivalMap()
-	r := bufio.NewReader(file)
-	for {
-		buf, err := r.ReadString('\n')
-		if err == io.EOF {
-			break
-		}
-		line := strings.Trim(string(buf), " ")
-		items := strings.Split(line, " ")
-		date := items[0]
-		desc := items[1]
-		fest.Add(date, desc)
-	}
-	return fest
-}
-
-var (
-	SolarFestivals = FestivalMap{
-		"0101": "元旦",
-		"0214": "情人节",
-		"0308": "妇女节",
-		"0312": "植树节",
-		"0401": "愚人节",
-		"0422": "地球日",
-		"0501": "劳动节",
-		"0504": "青年节",
-		"0531": "无烟日",
-		"0601": "儿童节",
-		"0606": "爱眼日",
-		"0701": "建党日",
-		"0707": "抗战纪念日",
-		"0801": "建军节",
-		"0910": "教师节",
-		"0918": "九·一八事变纪念日",
-		"1001": "国庆节",
-		"1031": "万圣节",
-		"1111": "光棍节",
-		"1201": "艾滋病日",
-		"1213": "南京大屠杀纪念日",
-		"1224": "平安夜",
-		"1225": "圣诞节",
-	}
-	LunarFestivals = FestivalMap{
-		"0101": "春节",
-		"0115": "元宵节",
-		"0202": "龙抬头",
-		"0505": "端午节",
-		"0707": "七夕",
-		"0715": "中元节",
-		"0815": "中秋节",
-		"0909": "重阳节",
-		"1208": "腊八节",
-		"1223": "小年",
-		"0100": "除夕",
-	}
-)
