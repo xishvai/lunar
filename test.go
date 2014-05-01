@@ -4,7 +4,7 @@ import "github.com/xishvai/lunar"
 import "fmt"
 
 func main() {
-	l0 := lunar.NewLunar(1988, 1, 11, 9, 9, 9)
+	l0 := lunar.NewLunar(1988, 2, 11, 9, 9, 9)
 	fmt.Println(l0)
 	s0 := l0.Convert()
 	fmt.Println(s0)

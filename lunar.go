@@ -14,10 +14,6 @@ import (
 )
 
 var (
-	// 保存公历农历之间的转换信息:以任意一年作为起点，把从这一年起若干年(依需要而定)的农历信息保存起来。
-	// 要保存一年的信息，只要两个信息就够了: 1)农历每个月的大小;2)今年是否有闰月，闰几月以及闰月的大小。
-	// 用一个整数来保存这些信息就足够了。
-
 	// 具体的方法是:用一位来表示一个月的大小，大月记为1，小月记为0，
 	// 这样就用掉12位(无闰月)或13位(有闰月)，再用高四位来表示闰月的月份，没有闰月记为0。
 	// 例如：2000年的信息数据是0xc96，化成二进制就是110010010110B，表示的
@@ -164,7 +160,7 @@ func (s *Solar) Convert() *Lunar {
 		offset += temp
 		i--
 	}
-	month = i - 1
+	month = i
 	day = offset + 1
 
 	return &Lunar{year, month, day, s.Hour(), s.Minute(), s.Second()}
@@ -185,7 +181,7 @@ func (l *Lunar) Convert() *Solar {
 	// increment month
 	// add days in all months up to the current month
 	var cur int
-	for cur = 1; cur < lmonth+1; cur++ {
+	for cur = 1; cur < lmonth; cur++ {
 		// add extra days for leap month
 		if cur == LeapMonth(lyear) {
 			offset += LeapDays(lyear)
@@ -322,7 +318,7 @@ func YearString(year int) string {
 }
 
 func MonthString(month int) string {
-	return lunarMonthNameTable[month%12] + "月"
+	return lunarMonthNameTable[(month-1)%12] + "月"
 }
 
 func DayString(day int) (s string) {
